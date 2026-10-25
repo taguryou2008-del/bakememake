@@ -1,4 +1,4 @@
-       /* GAME DATA DEFINITIONS */
+   /* GAME DATA DEFINITIONS */
         const RACES = {
             BAKEMON: { name: '化門', color: 'bg-red-700', border: 'border-red-500', text: 'text-red-400' },
             HUMAN: { name: '人間', color: 'bg-blue-700', border: 'border-blue-500', text: 'text-blue-400' }
@@ -236,7 +236,8 @@
 
                 this.render();
                 }
-executeOnlineTurn(playerSkillIndex, cpuSkillIndex) {
+    
+　　executeOnlineTurn(playerSkillIndex, cpuSkillIndex) {
     if (this.currentScreen !== "BATTLE") return;
 
     this.isProcessing = true;
