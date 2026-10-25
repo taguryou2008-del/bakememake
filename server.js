@@ -78,55 +78,10 @@ wss.on("connection", (ws) => {
             sendRoomStatus(room);
         }
 
-        // ルーム参加
+ // ルーム参加
         if (data.type === "joinRoom") {
-// 準備完了
-if (data.type === "ready") {
-
-    const room = rooms.get(ws.roomCode);
-
-    if (!room) {
-        return;
-    }
-
-    ws.ready = true;
-
-    console.log(
-        `プレイヤー${ws.playerNumber}が準備完了`
-    );
-
-    const readyCount = room.players.filter(
-        player => player.ready
-    ).length;
-
-    room.players.forEach(player => {
-
-        send(player, {
-            type: "readyStatus",
-            readyCount: readyCount
-        });
-
-    });
-
-    // 2人とも準備完了
-    if (readyCount === 2) {
-
-        room.players.forEach(player => {
-
-            send(player, {
-                type: "startCharacterSelect"
-            });
-
-        });
-
-        console.log(
-            `ルーム${room.code}：キャラクター選択開始`
-        );
-    }
-}
 
             const code = String(data.roomCode);
-
             const room = rooms.get(code);
 
             if (!room) {
@@ -160,6 +115,47 @@ if (data.type === "ready") {
 
             sendRoomStatus(room);
         }
+
+        // 準備完了
+        if (data.type === "ready") {
+
+            const room = rooms.get(ws.roomCode);
+
+            if (!room) {
+                return;
+            }
+
+            ws.ready = true;
+
+            console.log(
+                `プレイヤー${ws.playerNumber}が準備完了`
+            );
+
+            const readyCount = room.players.filter(
+                player => player.ready
+            ).length;
+
+            room.players.forEach(player => {
+                send(player, {
+                    type: "readyStatus",
+                    readyCount: readyCount
+                });
+            });
+
+            // 2人とも準備完了
+            if (readyCount === 2) {
+
+                room.players.forEach(player => {
+                    send(player, {
+                        type: "startCharacterSelect"
+                    });
+                });
+
+                console.log(
+                    `ルーム${room.code}：キャラクター選択開始`
+                );
+            }
+        }
     });
 
     ws.on("close", () => {
@@ -187,9 +183,9 @@ if (data.type === "ready") {
     });
 });
 
-server.listen(3000, "0.0.0.0", () => {
-    console.log("================================");
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, "0.0.0.0", () => {
     console.log("ゲームサーバー起動！");
-    console.log("http://localhost:3000");
-    console.log("================================");
+    console.log(`Port: ${PORT}`);
 });
