@@ -21,29 +21,36 @@ function makeRoomCode() {
 }
 
 function send(ws, data) {
-    if (ws.readyState === WebSocket.OPEN) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(data));
     }
 }
 
+function sendRoom(room, data) {
+    room.players.forEach(player => send(player, data));
+}
+
 function sendRoomStatus(room) {
-    const message = {
+    sendRoom(room, {
         type: "roomStatus",
         roomCode: room.code,
         playerCount: room.players.length
-    };
-
-    room.players.forEach(player => {
-        send(player, message);
     });
 }
 
-wss.on("connection", (ws) => {
+function getRoom(ws) {
+    if (!ws.roomCode) return null;
+    return rooms.get(ws.roomCode) || null;
+}
 
+function resetRound(room) {
+    room.turnChoices = {};
+}
+
+wss.on("connection", (ws) => {
     console.log("プレイヤーが接続しました");
 
     ws.on("message", (message) => {
-
         let data;
 
         try {
@@ -54,18 +61,24 @@ wss.on("connection", (ws) => {
 
         // ルーム作成
         if (data.type === "createRoom") {
+            if (ws.roomCode) return;
 
             const code = makeRoomCode();
 
             const room = {
-                code: code,
-                players: [ws]
+                code,
+                players: [ws],
+                teams: {},
+                turnChoices: {},
+                turnNumber: 1,
+                started: false
             };
 
             rooms.set(code, room);
 
             ws.roomCode = code;
             ws.playerNumber = 1;
+            ws.ready = false;
 
             send(ws, {
                 type: "roomCreated",
@@ -73,15 +86,16 @@ wss.on("connection", (ws) => {
                 playerNumber: 1
             });
 
-            console.log(`ルーム作成: ${code}`);
-
             sendRoomStatus(room);
+            console.log(`ルーム作成: ${code}`);
+            return;
         }
 
- // ルーム参加
+        // ルーム参加
         if (data.type === "joinRoom") {
+            if (ws.roomCode) return;
 
-            const code = String(data.roomCode);
+            const code = String(data.roomCode || "");
             const room = rooms.get(code);
 
             if (!room) {
@@ -92,7 +106,7 @@ wss.on("connection", (ws) => {
                 return;
             }
 
-            if (room.players.length >= 2) {
+            if (room.players.length >= 2 || room.started) {
                 send(ws, {
                     type: "error",
                     message: "このルームは満員です。"
@@ -104,6 +118,7 @@ wss.on("connection", (ws) => {
 
             ws.roomCode = code;
             ws.playerNumber = 2;
+            ws.ready = false;
 
             send(ws, {
                 type: "roomJoined",
@@ -111,73 +126,167 @@ wss.on("connection", (ws) => {
                 playerNumber: 2
             });
 
-            console.log(`ルーム参加: ${code}`);
-
             sendRoomStatus(room);
+            console.log(`ルーム参加: ${code}`);
+            return;
         }
+
+        const room = getRoom(ws);
+        if (!room || !room.players.includes(ws)) return;
 
         // 準備完了
         if (data.type === "ready") {
-
-            const room = rooms.get(ws.roomCode);
-
-            if (!room) {
-                return;
-            }
+            if (room.started) return;
 
             ws.ready = true;
-
-            console.log(
-                `プレイヤー${ws.playerNumber}が準備完了`
-            );
 
             const readyCount = room.players.filter(
                 player => player.ready
             ).length;
 
-            room.players.forEach(player => {
-                send(player, {
-                    type: "readyStatus",
-                    readyCount: readyCount
-                });
+            sendRoom(room, {
+                type: "readyStatus",
+                readyCount
             });
 
-            // 2人とも準備完了
-            if (readyCount === 2) {
+            if (
+                room.players.length === 2 &&
+                readyCount === 2
+            ) {
+                room.started = true;
 
-                room.players.forEach(player => {
-                    send(player, {
-                        type: "startCharacterSelect"
-                    });
+                sendRoom(room, {
+                    type: "startCharacterSelect"
                 });
 
                 console.log(
                     `ルーム${room.code}：キャラクター選択開始`
                 );
             }
+            return;
+        }
+
+        // チーム選択を受信
+        if (data.type === "selectTeam") {
+            if (!room.started) return;
+
+            if (
+                !Array.isArray(data.team) ||
+                data.team.length !== 3 ||
+                !data.team.every(
+                    key => typeof key === "string" &&
+                        key.length > 0 &&
+                        key.length <= 100
+                )
+            ) {
+                send(ws, {
+                    type: "error",
+                    message: "チームの選択内容が正しくありません。"
+                });
+                return;
+            }
+
+            room.teams[ws.playerNumber] = data.team;
+
+            send(ws, {
+                type: "teamWaiting",
+                message: "相手のチーム選択を待っています。"
+            });
+
+            // 両方のチームが決まったら開始
+            if (room.teams[1] && room.teams[2]) {
+                room.turnNumber = 1;
+                resetRound(room);
+
+                room.players.forEach(player => {
+                    const mine = room.teams[player.playerNumber];
+                    const opponentNumber =
+                        player.playerNumber === 1 ? 2 : 1;
+                    const opponent = room.teams[opponentNumber];
+
+                    send(player, {
+                        type: "startOnlineBattle",
+                        playerNumber: player.playerNumber,
+                        ownTeam: mine,
+                        opponentTeam: opponent,
+                        turnNumber: room.turnNumber
+                    });
+                });
+
+                console.log(`ルーム${room.code}：対戦開始`);
+            }
+            return;
+        }
+
+        // 技選択を受信
+        if (data.type === "turnChoice") {
+            if (!room.teams[1] || !room.teams[2]) return;
+
+            if (data.turnNumber !== room.turnNumber) return;
+
+            if (
+                !Number.isInteger(data.skillIndex) ||
+                data.skillIndex < 0 ||
+                data.skillIndex > 2
+            ) {
+                send(ws, {
+                    type: "error",
+                    message: "技の選択が正しくありません。"
+                });
+                return;
+            }
+
+            // 同じターンでの二重送信を防ぐ
+            if (room.turnChoices[ws.playerNumber] !== undefined) {
+                return;
+            }
+
+            room.turnChoices[ws.playerNumber] = data.skillIndex;
+
+            send(ws, {
+                type: "turnWaiting",
+                turnNumber: room.turnNumber,
+                message: "相手の技選択を待っています。"
+            });
+
+            // 両方が選んだら両者に送信
+            if (
+                room.turnChoices[1] !== undefined &&
+                room.turnChoices[2] !== undefined
+            ) {
+                sendRoom(room, {
+                    type: "turnResolved",
+                    turnNumber: room.turnNumber,
+                    player1SkillIndex: room.turnChoices[1],
+                    player2SkillIndex: room.turnChoices[2]
+                });
+
+                room.turnNumber += 1;
+                resetRound(room);
+            }
+            return;
         }
     });
 
     ws.on("close", () => {
-
         console.log("プレイヤーが切断しました");
 
-        if (!ws.roomCode) {
-            return;
-        }
+        const room = getRoom(ws);
+        if (!room) return;
 
-        const room = rooms.get(ws.roomCode);
-
-        if (!room) {
-            return;
-        }
-
-        room.players = room.players.filter(player => player !== ws);
+        room.players = room.players.filter(
+            player => player !== ws
+        );
 
         if (room.players.length === 0) {
-            rooms.delete(ws.roomCode);
-            console.log(`ルーム削除: ${ws.roomCode}`);
+            rooms.delete(room.code);
+            console.log(`ルーム削除: ${room.code}`);
         } else {
+            sendRoom(room, {
+                type: "opponentDisconnected",
+                message: "相手が切断しました。"
+            });
+
             sendRoomStatus(room);
         }
     });
