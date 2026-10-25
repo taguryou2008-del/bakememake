@@ -488,10 +488,27 @@
                     });
                 });
 
-                startButton.addEventListener('click', () => {
-                    if (selectedKeys.length !== 3) return;
-                    this.startBattle([...selectedKeys]);
-                });
+startButton.addEventListener('click', () => {
+    if (selectedKeys.length !== 3) return;
+
+    if (onlineMode) {
+        if (!onlineSocket || onlineSocket.readyState !== WebSocket.OPEN) {
+            alert('オンラインサーバーに接続されていません。');
+            return;
+        }
+
+        onlineSocket.send(JSON.stringify({
+            type: 'selectTeam',
+            team: [...selectedKeys]
+        }));
+
+        startButton.disabled = true;
+        startButton.textContent = '相手のチームを待っています…';
+        return;
+    }
+
+    this.startBattle([...selectedKeys]);
+});
 
                 return wrapper;
             }
@@ -653,21 +670,49 @@
                     </details>
                 `;
 
-                // 技ボタンのクリック処理
-                setTimeout(() => {
-                    const skillBtns = wrapper.querySelectorAll('.skill-btn');
+               // 技ボタンのクリック処理
+setTimeout(() => {
+    const skillBtns = wrapper.querySelectorAll('.skill-btn');
 
-                    skillBtns.forEach(btn => {
-                        btn.addEventListener('click', () => {
-                            const idx = parseInt(
-                                btn.getAttribute('data-skill-idx'),
-                                10
-                            );
+    skillBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = parseInt(
+                btn.getAttribute('data-skill-idx'),
+                10
+            );
 
-                            this.executeTurn(idx);
-                        });
-                    });
-                }, 0);
+            if (onlineMode) {
+                if (!onlineSocket || onlineSocket.readyState !== WebSocket.OPEN) {
+                    alert('オンラインサーバーに接続されていません。');
+                    return;
+                }
+
+                if (this.isProcessing) return;
+
+                const skill = this.playerTeam[this.playerActiveIdx].skills[idx];
+
+                if (skill.id === this.lastPlayerSkillId) {
+                    alert('同じ技は連続して使えません。');
+                    return;
+                }
+
+                this.isProcessing = true;
+
+                onlineSocket.send(JSON.stringify({
+                    type: 'turnChoice',
+                    skillIndex: idx,
+                    turnNumber: this.roundCount
+                }));
+
+                this.addLog('技を選択しました。相手の選択を待っています…');
+                this.render();
+                return;
+            }
+
+            this.executeTurn(idx);
+        });
+    });
+}, 0);
 
                 return wrapper;
             }
@@ -717,6 +762,7 @@
 let onlineSocket = null;
 let currentRoomCode = null;
 let currentPlayerNumber = null;
+let onlineMode = false;
 
 function startOnlineConnection() {
 
@@ -777,6 +823,45 @@ if (data.type === "startCharacterSelect") {
 
     game.currentScreen = "SELECT";
     game.render();
+}
+// オンライン対戦開始
+if (data.type === "startOnlineBattle") {
+    onlineMode = true;
+
+    game.playerTeam = data.ownTeam.map(key =>
+        game.createBattleChar(key)
+    );
+
+    game.cpuTeam = data.opponentTeam.map(key =>
+        game.createBattleChar(key)
+    );
+
+    game.playerActiveIdx = 0;
+    game.cpuActiveIdx = 0;
+    game.lastPlayerSkillId = null;
+    game.lastCpuSkillId = null;
+    game.roundCount = 1;
+    game.battleLogs = [];
+    game.winner = null;
+    game.isProcessing = false;
+
+    game.currentScreen = "BATTLE";
+    game.render();
+}
+// 両プレイヤーの技がそろったとき
+if (data.type === "turnResolved") {
+    const mySkillIndex = currentPlayerNumber === 1
+        ? data.player1SkillIndex
+        : data.player2SkillIndex;
+
+    const opponentSkillIndex = currentPlayerNumber === 1
+        ? data.player2SkillIndex
+        : data.player1SkillIndex;
+
+    game.isProcessing = false;
+
+    // 受信した技を使ってオンライン対戦のターンを解決
+    game.executeOnlineTurn(mySkillIndex, opponentSkillIndex);
 }
         // エラー
         if (data.type === "error") {
@@ -895,6 +980,7 @@ function showOnlineMenu() {
     // CPU対戦：モード画面を閉じて既存のゲームへ
     document.getElementById("cpu-mode-btn")
         .addEventListener("click", () => {
+       　　　onlineMode = false;
             menu.remove();
 
             game.currentScreen = "SELECT";
@@ -904,6 +990,7 @@ function showOnlineMenu() {
     // オンライン対戦：ルーム選択画面へ
     document.getElementById("online-mode-btn")
         .addEventListener("click", () => {
+       onlineMode = true;
             showOnlineRoomMenu();
         });
 }
