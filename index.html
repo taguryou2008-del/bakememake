@@ -59,6 +59,153 @@
             40%, 60% { transform: translate3d(6px, 0, 0); }
         }
     </style>
+    <style>
+/* 漫画風バトルエフェクト */
+@keyframes battleShake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-5px, 2px); }
+  40% { transform: translate(5px, -2px); }
+  60% { transform: translate(-3px, -1px); }
+  80% { transform: translate(3px, 1px); }
+}
+
+.battle-shake {
+  animation: battleShake 260ms ease-out;
+}
+
+.battle-fx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.battle-flash {
+  position: absolute;
+  inset: 0;
+  background: white;
+  animation: hitFlash 220ms ease-out forwards;
+}
+
+@keyframes hitFlash {
+  0% { opacity: 0.65; }
+  100% { opacity: 0; }
+}
+
+.damage-number {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  color: #ffdf62;
+  font-size: clamp(36px, 8vw, 64px);
+  font-weight: 1000;
+  -webkit-text-stroke: 2px #8b1b16;
+  paint-order: stroke fill;
+  text-shadow: 3px 4px 0 #54120e;
+  transform: translate(-50%, 0) scale(0.5) rotate(-8deg);
+  animation: damagePop 700ms ease-out forwards;
+}
+
+@keyframes damagePop {
+  15% { transform: translate(-50%, -10px) scale(1.2) rotate(-8deg); }
+  35% { transform: translate(-50%, -18px) scale(1) rotate(5deg); }
+  100% { transform: translate(-50%, -90px) scale(0.85) rotate(5deg); opacity: 0; }
+}
+
+.battle-shockwave {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 35px;
+  height: 35px;
+  border: 5px solid #fff3a1;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 18px #ffae35;
+  animation: shockwave 480ms ease-out forwards;
+}
+
+@keyframes shockwave {
+  to {
+    width: 230px;
+    height: 230px;
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
+.battle-particle {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 9px;
+  height: 18px;
+  border-radius: 3px;
+  background: #ffd85c;
+  box-shadow: 0 0 10px #ff9b30;
+  animation: particleBurst 550ms ease-out forwards;
+}
+
+@keyframes particleBurst {
+  to {
+    transform: translate(var(--dx), var(--dy)) rotate(240deg) scale(0.2);
+    opacity: 0;
+  }
+}
+
+.battle-result-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background: #050812d9;
+  pointer-events: none;
+  animation: resultFade 2.2s ease forwards;
+}
+
+.battle-result-fx span {
+  font-size: clamp(42px, 12vw, 90px);
+  font-weight: 1000;
+  font-style: italic;
+  text-align: center;
+  color: #ffd45a;
+  -webkit-text-stroke: 2px #7c2518;
+  text-shadow: 0 0 25px #ff8c25, 5px 6px 0 #42130d;
+  animation: resultZoom 650ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+.battle-result-fx.is-defeat span {
+  color: #e5e7eb;
+  -webkit-text-stroke-color: #4b111b;
+  text-shadow: 0 0 22px #e11d48, 4px 5px 0 #290812;
+}
+
+@keyframes resultZoom {
+  from { transform: scale(2.2) rotate(-7deg); opacity: 0; }
+  to { transform: scale(1) rotate(-3deg); opacity: 1; }
+}
+
+@keyframes resultFade {
+  0%, 75% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-shake,
+  .battle-flash,
+  .damage-number,
+  .battle-shockwave,
+  .battle-particle,
+  .battle-result-fx,
+  .battle-result-fx span {
+    animation-duration: 1ms !important;
+  }
+}
+</style>
 </head>
 <body class="min-h-screen flex flex-col justify-between p-2 md:p-4 select-none">
 
