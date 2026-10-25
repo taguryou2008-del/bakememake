@@ -148,7 +148,7 @@
                 return -1;
             }
 
-            executeTurn(playerSkillIndex) {
+            this.render();
                 if (this.isProcessing) return;
 
                 const playerChar = this.playerTeam[this.playerActiveIdx];
@@ -236,6 +236,66 @@
 
                 this.render();
                 }
+executeOnlineTurn(playerSkillIndex, cpuSkillIndex) {
+    if (this.currentScreen !== "BATTLE") return;
+
+    this.isProcessing = true;
+
+    const player = this.playerTeam[this.playerActiveIdx];
+    const cpu = this.cpuTeam[this.cpuActiveIdx];
+
+    const playerSkill = player.skills[playerSkillIndex];
+    const cpuSkill = cpu.skills[cpuSkillIndex];
+
+    if (!player || !cpu || !playerSkill || !cpuSkill) {
+        this.isProcessing = false;
+        return;
+    }
+
+    this.lastPlayerSkillId = playerSkill.id;
+    this.lastCpuSkillId = cpuSkill.id;
+
+    const result = this.judgeJanken(
+        playerSkill.hand,
+        cpuSkill.hand
+    );
+
+    if (result === 1) {
+        this.addLog(`あなたの「${playerSkill.name}」が勝利！`);
+        this.applySkillEffects(player, cpu, playerSkill);
+    } else if (result === -1) {
+        this.addLog(`相手の「${cpuSkill.name}」が勝利！`);
+        this.applySkillEffects(cpu, player, cpuSkill);
+    } else {
+        this.addLog("じゃんけんはあいこ！");
+
+        if (playerSkill.priorityOnDraw) {
+            this.addLog(`あなたの「${playerSkill.name}」があいこで発動！`);
+            this.applySkillEffects(player, cpu, playerSkill);
+        } else if (cpuSkill.priorityOnDraw) {
+            this.addLog(`相手の「${cpuSkill.name}」があいこで発動！`);
+            this.applySkillEffects(cpu, player, cpuSkill);
+        } else if (player.sp > cpu.sp) {
+            this.addLog("SPが多いあなたが攻撃！");
+            this.applySkillEffects(player, cpu, playerSkill);
+        } else if (cpu.sp > player.sp) {
+            this.addLog("SPが多い相手が攻撃！");
+            this.applySkillEffects(cpu, player, cpuSkill);
+        } else {
+            this.addLog("SPも同じなので攻撃なし！");
+        }
+    }
+
+    this.applyDoT(player, "あなた");
+    this.applyDoT(cpu, "相手");
+
+    this.checkFaintAndSwitch();
+    this.roundCount++;
+
+    this.isProcessing = false;
+    this.checkGameOver();
+    this.render();
+}
             
             applySkillEffects(attacker, defender, skill) {
                 // Base Damage Calculation
