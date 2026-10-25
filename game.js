@@ -148,7 +148,8 @@
                 return -1;
             }
 
-            this.render();
+           executeTurn(playerSkillIndex) {
+              　this.render();
                 if (this.isProcessing) return;
 
                 const playerChar = this.playerTeam[this.playerActiveIdx];
