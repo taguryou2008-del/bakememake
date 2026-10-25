@@ -66,6 +66,82 @@
                 ]
             }
         };
+/* ==============================
+   漫画風バトルエフェクト
+============================== */
+
+function playBattleHitEffect(damage) {
+    // 画面にエフェクトを重ねる
+    const fx = document.createElement('div');
+    fx.className = 'battle-fx-overlay';
+    fx.setAttribute('aria-hidden', 'true');
+
+    // 白いヒットフラッシュ
+    const flash = document.createElement('div');
+    flash.className = 'battle-flash';
+    fx.appendChild(flash);
+
+    // 衝撃波
+    const shockwave = document.createElement('div');
+    shockwave.className = 'battle-shockwave';
+    fx.appendChild(shockwave);
+
+    // ダメージ数字
+    const number = document.createElement('div');
+    number.className = 'damage-number';
+    number.textContent = `−${damage}`;
+    fx.appendChild(number);
+
+    // 飛び散る光の粒子
+    for (let i = 0; i < 12; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'battle-particle';
+
+        const angle = (Math.PI * 2 * i) / 12;
+        const distance = 65 + Math.random() * 100;
+
+        particle.style.setProperty('--dx',
+            `${Math.cos(angle) * distance}px`);
+        particle.style.setProperty('--dy',
+            `${Math.sin(angle) * distance}px`);
+
+        fx.appendChild(particle);
+    }
+
+    document.body.appendChild(fx);
+
+    // ゲーム画面を揺らす
+    const app = document.getElementById('app-container');
+    if (app) {
+        app.classList.remove('battle-shake');
+        void app.offsetWidth;
+        app.classList.add('battle-shake');
+
+        setTimeout(() => {
+            app.classList.remove('battle-shake');
+        }, 300);
+    }
+
+    setTimeout(() => fx.remove(), 800);
+}
+
+function playBattleResultEffect(isWin) {
+    // 同じ結果演出の重複を防ぐ
+    document.getElementById('battle-result-fx')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'battle-result-fx';
+    overlay.className =
+        `battle-result-fx${isWin ? '' : ' is-defeat'}`;
+
+    const text = document.createElement('span');
+    text.textContent = isWin ? 'VICTORY!' : 'DEFEAT...';
+
+    overlay.appendChild(text);
+    document.body.appendChild(overlay);
+
+    setTimeout(() => overlay.remove(), 2300);
+}
 
         class GameEngine {
             constructor() {
@@ -327,6 +403,7 @@
 
                     defender.hp = Math.max(0, defender.hp - finalDamage);
                     this.addLog(`💥 ${defender.name} に ${finalDamage} ダメージ！`);
+                   playBattleHitEffect(finalDamage);
                 }
 
                 // Specific Buffs & Debuffs
@@ -420,6 +497,9 @@
                 if (pAllFainted || cAllFainted) {
                     this.currentScreen = 'RESULT';
                     this.winner = pAllFainted ? 'CPU' : 'PLAYER';
+
+　　　　　　　　　　　playBattleResultEffect(this.winner === 'PLAYER');
+                   
                     this.render();
                     return true;
                 }
